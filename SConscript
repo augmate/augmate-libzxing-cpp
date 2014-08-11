@@ -14,6 +14,11 @@ vars.Add(BoolVariable('DEBUG', 'Set to disable optimizations', False))
 vars.Add(BoolVariable('PIC', 'Set to 1 for to always generate PIC code', True))
 env = Environment(variables = vars)
 
+#
+# create your specialized toolchain:
+# ~/android-ndk/build/tools/make-standalone-toolchain.sh --platform=android-19 --install-dir=/tmp/android-toolchain --arch=x86
+#
+
 env.Replace(CXX = '/tmp/android-toolchain/bin/i686-linux-android-g++')
 env.Replace(CC = '/tmp/android-toolchain/bin/i686-linux-android-gcc')
 env.Replace(AR = '/tmp/android-toolchain/bin/i686-linux-android-ar')
