@@ -14,35 +14,47 @@ vars.Add(BoolVariable('DEBUG', 'Set to disable optimizations', False))
 vars.Add(BoolVariable('PIC', 'Set to 1 for to always generate PIC code', True))
 env = Environment(variables = vars)
 
+# Augmate tweaks:
 #
 # create your specialized toolchain:
-# ~/android-ndk/build/tools/make-standalone-toolchain.sh --platform=android-19 --install-dir=/tmp/android-toolchain --arch=x86
+# bash ~/android-ndk/build/tools/make-standalone-toolchain.sh --platform=android-19 --install-dir=/tmp/android-toolchain-x86 --arch=x86
+# bash ~/android-ndk/build/tools/make-standalone-toolchain.sh --platform=android-19 --install-dir=/tmp/android-toolchain-arm --arch=arm
 #
+# use --arm and --x86 options to toggle between builds
 
-env.Replace(CXX = '/tmp/android-toolchain/bin/i686-linux-android-g++')
-env.Replace(CC = '/tmp/android-toolchain/bin/i686-linux-android-gcc')
-env.Replace(AR = '/tmp/android-toolchain/bin/i686-linux-android-ar')
-env.Replace(RANLIB = '/tmp/android-toolchain/bin/i686-linux-android-ranlib')
-env.Replace(LINK = '/tmp/android-toolchain/bin/i686-linux-android-g++')
-env.Replace(LD = '/tmp/android-toolchain/bin/i686-linux-android-ld')
+AddOption('--platform', dest='platform', type='string', nargs=1, action='store', default='x86', help='target platform (valid values: "x86" or "arm")')
+target_platform = GetOption('platform')
+print "Building for platform = " + target_platform
 
 compile_options = {}
-if platform.system() is 'Windows':
-  compile_options['CXXFLAGS'] = '-D_CRT_SECURE_NO_WARNINGS /fp:fast /EHsc'
+
+# Force ANSI (C++98) to ensure compatibility with MSVC.
+cxxflags = ['-ansi -pedantic -fPIC -fexceptions']
+if env['DEBUG']:
+  #compile_options['CPPDEFINES'] = '-DDEBUG'
+  cxxflags.append('-O0 -g3 -ggdb -DNO_ICONV')
+  cxxflags.append('-Wall -Wextra')
+  # -Werror
 else:
-  # Force ANSI (C++98) to ensure compatibility with MSVC.
-  cxxflags = ['-ansi -pedantic']
-  if env['DEBUG']:
-    #compile_options['CPPDEFINES'] = '-DDEBUG'
-    cxxflags.append('-O0 -g3 -ggdb -DNO_ICONV')
-    cxxflags.append('-Wall -Wextra')
-    # -Werror
-  else:
-    cxxflags.append('-Os -Wall -Wextra -DNO_ICONV')
-  if env['PIC']:
-    cxxflags.append('-fPIC')
-  compile_options['CXXFLAGS'] = ' '.join(cxxflags)
-  compile_options['LINKFLAGS'] = '-ldl -lstdc++ -L/tmp/android-toolchain/i686-linux-android/lib'
+  cxxflags.append('-Os -Wall -Wextra -DNO_ICONV')
+compile_options['CXXFLAGS'] = ' '.join(cxxflags)
+
+# platform specific flags and paths
+if target_platform == "x86":
+  platform_folder = '/tmp/android-toolchain-x86/bin/i686-linux-android-'
+  compile_options['LINKFLAGS'] = '-ldl -lstdc++ -L/tmp/android-toolchain-x86/i686-linux-android/lib'
+else:
+  platform_folder = '/tmp/android-toolchain-arm/bin/arm-linux-androideabi-'
+  cxxflags.append('-march=arm7v-a -mfloat-abi=softfp -mfpu=neon')
+  compile_options['LINKFLAGS'] = '-ldl -lstdc++ -L/tmp/android-toolchain-arm/arm-linux-android/lib'
+
+# gcc toolchain bin paths
+env.Replace(CXX = platform_folder + 'g++')
+env.Replace(CC = platform_folder + 'gcc')
+env.Replace(AR = platform_folder + 'ar')
+env.Replace(RANLIB = platform_folder + 'ranlib')
+env.Replace(LINK = platform_folder + 'g++')
+env.Replace(LD = platform_folder + 'ld')
 
 def all_files(dir, ext='.cpp', level=6):
   files = []
@@ -73,7 +85,7 @@ libzxing_include = ['core/src']
 if platform.system() is 'Windows':
   libzxing_files += all_files('core/src/win32')
   libzxing_include += ['core/src/win32']
-libzxing = env.Library('zxing', source=libzxing_files,
+libzxing = env.SharedLibrary('zxing', source=libzxing_files,
   CPPPATH=libzxing_include + libiconv_libs, **compile_options)
 
 # Add cli.
